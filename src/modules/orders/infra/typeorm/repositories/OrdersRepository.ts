@@ -2,7 +2,9 @@ import { getRepository, Repository } from 'typeorm';
 
 import IOrdersRepository from '@modules/orders/repositories/IOrdersRepository';
 import ICreateOrderDTO from '@modules/orders/dtos/ICreateOrderDTO';
+
 import Order from '../entities/Order';
+import OrdersProducts from '../entities/OrdersProducts';
 
 class OrdersRepository implements IOrdersRepository {
   private ormRepository: Repository<Order>;
@@ -12,11 +14,28 @@ class OrdersRepository implements IOrdersRepository {
   }
 
   public async create({ customer, products }: ICreateOrderDTO): Promise<Order> {
-    // TODO
+    const order_products = products.map(product => {
+      const orderProduct = new OrdersProducts();
+      orderProduct.product_id = product.product_id;
+      orderProduct.price = product.price;
+      orderProduct.quantity = product.quantity;
+      return orderProduct;
+    });
+
+    const order = this.ormRepository.create({
+      customer,
+      order_products,
+    });
+
+    await this.ormRepository.save(order);
+
+    return order;
   }
 
   public async findById(id: string): Promise<Order | undefined> {
-    // TODO
+    const order = await this.ormRepository.findOne(id);
+
+    return order;
   }
 }
 

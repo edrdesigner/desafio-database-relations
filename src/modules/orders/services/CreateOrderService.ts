@@ -4,10 +4,8 @@ import AppError from '@shared/errors/AppError';
 
 import IProductsRepository from '@modules/products/repositories/IProductsRepository';
 import ICustomersRepository from '@modules/customers/repositories/ICustomersRepository';
-import Product from '@modules/products/infra/typeorm/entities/Product';
 import Order from '../infra/typeorm/entities/Order';
 import IOrdersRepository from '../repositories/IOrdersRepository';
-import { IProduct as IProductDTO } from '../dtos/ICreateOrderDTO';
 
 interface IProduct {
   id: string;
@@ -17,10 +15,6 @@ interface IProduct {
 interface IRequest {
   customer_id: string;
   products: IProduct[];
-}
-
-interface IDictionary {
-  [key: string]: Product;
 }
 
 @injectable()
@@ -45,41 +39,30 @@ class CreateOrderService {
       return { id: product.id };
     });
 
-    const foundProducts = await this.productsRepository.findAllById(productIds);
+    const productsData = await this.productsRepository.findAllById(productIds);
 
-    if (foundProducts.length !== productIds.length) {
+    if (productsData.length !== productIds.length) {
       throw new AppError('One or more products not found');
     }
 
-    const productsHashMap = Object.assign(
-      {},
-      ...foundProducts.map(product => {
-        return { [product.id]: product };
-      }),
-    ) as IDictionary;
-
-    const productsWithPrices = products.map(product => {
-      if (product.quantity > productsHashMap[product.id].quantity) {
-        throw new AppError(
-          'One or more of the specified products do not have sufficient quantity for that order',
-        );
-      }
-
-      productsHashMap[product.id].quantity -= product.quantity;
+    const orderProducts = productsData.map(productData => {
+      const orderedProduct = products.find(
+        productFind => productFind.id === productData.id,
+      );
 
       return {
-        product_id: product.id,
-        quantity: product.quantity,
-        price: productsHashMap[product.id].price,
-      } as IProductDTO;
+        product_id: productData.id,
+        price: productData.price,
+        quantity: orderedProduct?.quantity || 0,
+      };
     });
+
+    await this.productsRepository.updateQuantity(products);
 
     const order = await this.ordersRepository.create({
       customer,
-      products: productsWithPrices,
+      products: orderProducts,
     });
-
-    await this.productsRepository.updateQuantity(foundProducts);
 
     return order;
   }
